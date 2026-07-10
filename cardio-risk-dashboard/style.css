@@ -147,6 +147,24 @@ input, select {
 
 .site-nav a:hover { color: var(--foreground); }
 
+.backend-indicator {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.65rem;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--border);
+    color: var(--muted-fg);
+    background: var(--muted);
+    cursor: default;
+    white-space: nowrap;
+    transition: background 0.3s, color 0.3s;
+}
+
+.backend-indicator.online {
+    background: rgba(59,138,90,0.1);
+    color: var(--risk-low);
+    border-color: rgba(59,138,90,0.3);
+}
+
 /* =====================================================
    HERO
    ===================================================== */

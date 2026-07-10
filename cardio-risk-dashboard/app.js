@@ -1,10 +1,12 @@
 // =====================================================
 // Cormeum — app.js
 // Two-page flow: Page 1 (form + preview) → Page 2 (full report)
+// Backend: Flask API at localhost:5050/predict (with JS fallback)
 // =====================================================
 
-// Shared computed data
-let _computed = null;
+const API_URL = "http://localhost:5050/predict";
+let _computed  = null;
+let _backendOk = false;
 
 // ----- Init -----
 document.addEventListener("DOMContentLoaded", () => {
@@ -24,7 +26,32 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         });
     });
+
+    // Probe backend health
+    probeBackend();
 });
+
+async function probeBackend() {
+    const indicator = document.getElementById("backend-indicator");
+    try {
+        const res = await fetch("http://localhost:5050/", { method: "GET", signal: AbortSignal.timeout(2000) });
+        if (res.ok) {
+            _backendOk = true;
+            if (indicator) {
+                indicator.title = "ML backend online — using real CVD model";
+                indicator.classList.add("online");
+                indicator.textContent = "🟢 Live model";
+            }
+            return;
+        }
+    } catch (_) {}
+    _backendOk = false;
+    if (indicator) {
+        indicator.title = "ML backend offline — using built-in logistic formula";
+        indicator.classList.remove("online");
+        indicator.textContent = "🟡 Fallback mode";
+    }
+}
 
 // ----- Navigation -----
 function navigateToInputs() {
@@ -70,7 +97,7 @@ function resetForm() {
 }
 
 // ----- Form Submit -----
-function handleFormSubmit(event) {
+async function handleFormSubmit(event) {
     event.preventDefault();
     const overlay = document.getElementById("loading-overlay");
     overlay.classList.add("active");
@@ -98,16 +125,42 @@ function handleFormSubmit(event) {
 
     const smoke = document.getElementById("smoke").value === "true";
 
-    setTimeout(() => {
-        // 1. BMI
-        const bmi = weight / Math.pow(height / 100, 2);
-        let bmiClass = "Normal";
-        if      (bmi < 18.5) bmiClass = "Underweight";
-        else if (bmi < 25)   bmiClass = "Normal";
-        else if (bmi < 30)   bmiClass = "Overweight";
-        else                  bmiClass = "Obese";
+    // ── Try backend first, fall back to JS ──────────────────────────────
+    const payload = {
+        age, gender, height, weight,
+        ap_hi:       sbpRaw === "" ? null : sbp,
+        ap_lo:       dbpRaw === "" ? null : dbp,
+        cholesterol: cholRaw ? cholesterol : null,
+        glucose:     glucRaw ? glucose : null,
+        smoke, alco, active
+    };
 
-        // 2. Blood Pressure Classification
+    if (_backendOk) {
+        // ── Path A: Backend ML prediction ──────────────────────────────
+        try {
+            const res = await fetch(API_URL, {
+                method:  "POST",
+                headers: { "Content-Type": "application/json" },
+                body:    JSON.stringify(payload),
+                signal:  AbortSignal.timeout(12000)
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            overlay.classList.remove("active");
+            _handleResult(data, { sbpDefaulted, dbpDefaulted, cholDefaulted, glucDefaulted });
+            return;
+        } catch (err) {
+            console.warn("[Cormeum] Backend call failed, falling back to JS:", err);
+            _backendOk = false;
+            probeBackend();
+        }
+    }
+
+    // ── Path B: JS logistic fallback ───────────────────────────────────
+    setTimeout(() => {
+        const bmi = weight / Math.pow(height / 100, 2);
+        let bmiClass = bmi < 18.5 ? "Underweight" : bmi < 25 ? "Normal" : bmi < 30 ? "Overweight" : "Obese";
+
         let bpClass = "Normal";
         if      (sbp < 120 && dbp < 80)                                   bpClass = "Normal";
         else if (sbp >= 120 && sbp < 130 && dbp < 80)                     bpClass = "Elevated";
@@ -115,16 +168,13 @@ function handleFormSubmit(event) {
         else if ((sbp >= 140 && sbp <= 180) || (dbp >= 90 && dbp <= 120)) bpClass = "Stage 2 Hypertension";
         else if (sbp > 180 || dbp > 120)                                   bpClass = "Hypertensive Crisis";
 
-        // 3. Logistic Risk Model
         let z = -3.8;
         z += age * 0.042;
         if (gender === "male") z += 0.38;
         if (bmi >= 25 && bmi < 30) z += 0.25;
         if (bmi >= 30) z += 0.6;
-        if (bpClass === "Elevated")             z += 0.3;
-        if (bpClass === "Stage 1 Hypertension") z += 0.75;
-        if (bpClass === "Stage 2 Hypertension") z += 1.45;
-        if (bpClass === "Hypertensive Crisis")  z += 2.3;
+        const bpMap = { "Normal": 0, "Elevated": 0.3, "Stage 1 Hypertension": 0.75, "Stage 2 Hypertension": 1.45, "Hypertensive Crisis": 2.3 };
+        z += bpMap[bpClass] || 0;
         const pp = sbp - dbp;
         if (pp > 50) z += (pp - 50) * 0.015;
         if (cholesterol === 2) z += 0.55;
@@ -133,61 +183,97 @@ function handleFormSubmit(event) {
         if (glucose === 3) z += 0.85;
         if (smoke) z += 0.8;
 
-        let riskScore = Math.round((1 / (1 + Math.exp(-z))) * 100);
-        riskScore = Math.max(2, Math.min(99, riskScore));
+        const probability = 1 / (1 + Math.exp(-z));
+        let riskScore = Math.max(2, Math.min(99, Math.round(probability * 100)));
+        const band      = riskScore < 10 ? "low" : riskScore < 25 ? "mid" : "high";
+        const badgeLabel = riskScore < 10 ? "Low risk" : riskScore < 25 ? "Moderate risk" : "Elevated risk";
 
-        // 4. Risk band
-        let band = "low", bandColor = "var(--risk-low)", badgeLabel = "Low risk";
-        if (riskScore >= 10 && riskScore < 25) {
-            band = "mid";  bandColor = "var(--risk-mid)";  badgeLabel = "Moderate risk";
-        } else if (riskScore >= 25) {
-            band = "high"; bandColor = "var(--risk-high)"; badgeLabel = "Elevated risk";
-        }
-
-        // Store computed results for Page 2
-        _computed = {
-            age, gender, height, weight, sbp, dbp, bmi, bmiClass, bpClass,
-            cholesterol, glucose, smoke, riskScore, band, bandColor, badgeLabel,
-            sbpDefaulted, dbpDefaulted, cholDefaulted, glucDefaulted
+        const bpCatMap = { "Normal": 0, "Elevated": 1, "Stage 1 Hypertension": 2, "Stage 2 Hypertension": 3, "Hypertensive Crisis": 4 };
+        const cholMap  = ["", "Normal", "Above normal", "Well above normal"];
+        const data = {
+            risk_score: riskScore, probability, band, badge_label: badgeLabel,
+            model_used: "fallback", bmi: +bmi.toFixed(1), bmi_class: bmiClass,
+            bp_category: bpCatMap[bpClass] ?? 0,
+            imputed_fields: [
+                ...(sbpDefaulted ? ["Systolic BP"] : []),
+                ...(dbpDefaulted ? ["Diastolic BP"] : []),
+                ...(cholDefaulted ? ["Cholesterol"] : []),
+                ...(glucDefaulted ? ["Glucose"] : []),
+            ],
+            used_defaults: sbpDefaulted || dbpDefaulted || cholDefaulted || glucDefaulted,
+            summary: { age, gender, height, weight, ap_hi: sbp, ap_lo: dbp, cholesterol, glucose, smoke, alco, active },
+            factors: [
+                { name: "Blood pressure", pct: [8,28,52,82,96][bpCatMap[bpClass]??0], is_risk: (bpCatMap[bpClass]??0)>1, note: `${sbp}/${dbp} mmHg` },
+                { name: "Age",            pct: Math.round(Math.min(Math.max((age-18)/62*100,5),95)), is_risk: age>=45, note: `${age} yrs` },
+                { name: "BMI",            pct: bmi>=30?70:bmi>=25?38:10, is_risk: bmi>=25, note: bmi.toFixed(1) },
+                { name: "Cholesterol",    pct: cholesterol===3?80:cholesterol===2?44:9, is_risk: cholesterol>1, note: cholMap[cholesterol] },
+                { name: "Glucose",        pct: glucose===3?64:glucose===2?33:8, is_risk: glucose>1, note: cholMap[glucose] },
+                { name: "Smoking",        pct: smoke?74:5, is_risk: smoke, note: smoke?"Active smoker":"Non-smoker" },
+                { name: "Sex",            pct: gender==="male"?38:18, is_risk: gender==="male", note: gender==="male"?"Male":"Female" },
+            ]
         };
-
-        // 5. Update Page 1 preview panel
         overlay.classList.remove("active");
-        document.getElementById("empty-state").classList.add("hidden");
-        document.getElementById("result-preview").classList.remove("hidden");
+        _handleResult(data, { sbpDefaulted, dbpDefaulted, cholDefaulted, glucDefaulted });
+    }, 600);
+}
 
-        const scoreEl = document.getElementById("score-number-preview");
-        scoreEl.textContent = riskScore;
-        scoreEl.style.color = bandColor;
+// Internal handler for rendering results
+function _handleResult(res, flags) {
+    const bandColor = res.band === "low" ? "var(--risk-low)" : res.band === "mid" ? "var(--risk-mid)" : "var(--risk-high)";
+    
+    _computed = {
+        ...res.summary,
+        bmi: res.bmi,
+        bmiClass: res.bmi_class,
+        bpClass: ["Normal", "Elevated", "Stage 1 Hypertension", "Stage 2 Hypertension", "Hypertensive Crisis"][res.bp_category],
+        riskScore: res.risk_score,
+        band: res.band,
+        bandColor: bandColor,
+        badgeLabel: res.badge_label,
+        ...flags
+    };
 
-        const badge = document.getElementById("risk-badge-preview");
-        badge.textContent = badgeLabel;
-        badge.className = `risk-badge ${band}`;
+    document.getElementById("empty-state").classList.add("hidden");
+    document.getElementById("result-preview").classList.remove("hidden");
 
-        const fill = document.getElementById("score-bar-preview");
-        fill.style.width = "0%";
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-            fill.style.width = riskScore + "%";
-            fill.style.backgroundColor = bandColor;
-        }));
+    const scoreEl = document.getElementById("score-number-preview");
+    scoreEl.textContent = res.risk_score;
+    scoreEl.style.color = bandColor;
 
-        const cholMap = { 1: "Normal", 2: "Above normal", 3: "Well above normal" };
-        document.getElementById("bmi-note-preview").innerHTML =
-            `BMI <strong>${bmi.toFixed(1)}</strong> (${bmiClass}). Score reflects cholesterol (${cholMap[cholesterol]}), glucose (${cholMap[glucose]}), and lifestyle.`;
+    const badge = document.getElementById("risk-badge-preview");
+    badge.textContent = res.badge_label;
+    badge.className = `risk-badge ${res.band}`;
 
-        // Scroll to result panel on mobile
-        if (window.innerWidth < 1024) {
-            document.getElementById("result").scrollIntoView({ behavior: "smooth", block: "start" });
-        }
+    const fill = document.getElementById("score-bar-preview");
+    fill.style.width = "0%";
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        fill.style.width = res.risk_score + "%";
+        fill.style.backgroundColor = bandColor;
+    }));
 
-    }, 800);
+    document.getElementById("bmi-note-preview").innerHTML =
+        `BMI <strong>${res.bmi}</strong> (${res.bmi_class}). Score reflects all provided inputs.`;
+
+    if (window.innerWidth < 1024) {
+        document.getElementById("result").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
 }
 
 // ----- Render Page 2 -----
 function renderPage2(d) {
-    const { age, gender, height, weight, sbp, dbp, bmi, bmiClass, bpClass,
-            cholesterol, glucose, smoke, riskScore, band, bandColor, badgeLabel,
-            sbpDefaulted, dbpDefaulted, cholDefaulted, glucDefaulted } = d;
+    const bandColor = d.bandColor;
+    const { riskScore, band, badgeLabel, bmi, bmiClass, bpClass, cholesterol, glucose } = d;
+    const sbp = d.ap_hi;
+    const dbp = d.ap_lo;
+    const age = d.age;
+    const gender = d.gender;
+    const smoke = d.smoke;
+    const sbpDefaulted = d.sbpDefaulted;
+    const dbpDefaulted = d.dbpDefaulted;
+    const cholDefaulted = d.cholDefaulted;
+    const glucDefaulted = d.glucDefaulted;
+    const height = d.height;
+    const weight = d.weight;
 
     const cholMap = { 1: "Normal", 2: "Above normal", 3: "Well above normal" };
 
