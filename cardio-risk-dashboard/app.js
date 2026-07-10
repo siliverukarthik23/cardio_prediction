@@ -1,607 +1,240 @@
-// Global variables
-let riskChart = null;
+// =====================================================
+// Cormeum — app.js
+// Segmented controls · Risk prediction · Result panel
+// =====================================================
 
-// Initialize Dashboard
 document.addEventListener("DOMContentLoaded", () => {
-    // Current date for medical report
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('report-date').innerText = today;
+    // Footer year
+    const yearEl = document.getElementById("footer-year");
+    if (yearEl) yearEl.textContent = `© ${new Date().getFullYear()} Cormeum. Educational tool — not medical advice.`;
+
+    // Initialise all segmented controls
+    document.querySelectorAll(".segmented").forEach(seg => {
+        const hiddenId = seg.id.replace("seg-", "");
+        const hiddenInput = document.getElementById(hiddenId);
+
+        seg.querySelectorAll(".seg-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                seg.querySelectorAll(".seg-btn").forEach(b => b.classList.remove("active"));
+                btn.classList.add("active");
+                if (hiddenInput) hiddenInput.value = btn.dataset.value;
+            });
+        });
+    });
 });
 
-// Navigate back to the Inputs Page
-function navigateToInputs() {
-    document.getElementById("results-page").classList.add("hidden");
-    document.getElementById("btn-print-report").style.display = "none";
-    document.getElementById("input-page").classList.remove("hidden");
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-// Reset Dashboard to initial state
-function resetDashboard() {
+// ----- Reset -----
+function resetForm() {
     document.getElementById("metrics-form").reset();
-    navigateToInputs();
+
+    // Reset each segmented control to its first button
+    document.querySelectorAll(".segmented").forEach(seg => {
+        const btns = seg.querySelectorAll(".seg-btn");
+        btns.forEach(b => b.classList.remove("active"));
+        if (btns.length) btns[0].classList.add("active");
+
+        const hiddenId = seg.id.replace("seg-", "");
+        const hiddenInput = document.getElementById(hiddenId);
+        if (hiddenInput && btns[0]) hiddenInput.value = btns[0].dataset.value;
+    });
+
+    // Restore specific defaults
+    const genderSeg = document.getElementById("seg-gender");
+    if (genderSeg) {
+        const btns = genderSeg.querySelectorAll(".seg-btn");
+        btns.forEach(b => b.classList.remove("active"));
+        btns[1].classList.add("active"); // Male
+        document.getElementById("gender").value = "male";
+    }
+
+    // Show empty state, hide results
+    document.getElementById("empty-state").classList.remove("hidden");
+    document.getElementById("result-view").classList.add("hidden");
 }
 
-// Handle Form Submission and navigate to Page 2
+// ----- Form Submit -----
 function handleFormSubmit(event) {
     event.preventDefault();
 
-    // Show loading overlay
-    const loadingOverlay = document.getElementById("loading-overlay");
-    loadingOverlay.classList.add("active");
+    const overlay = document.getElementById("loading-overlay");
+    overlay.classList.add("active");
 
-    // --- Gather Required Inputs ---
-    const age = parseInt(document.getElementById("age").value);
+    // Required inputs
+    const age    = parseInt(document.getElementById("age").value);
     const gender = document.getElementById("gender").value;
     const height = parseFloat(document.getElementById("height").value);
     const weight = parseFloat(document.getElementById("weight").value);
 
-    // --- Gather Optional Inputs with defaults ---
+    // Optional inputs (default to healthy averages)
     const sbpRaw = document.getElementById("ap-hi").value;
     const dbpRaw = document.getElementById("ap-low").value;
-    const cholRaw = document.getElementById("cholesterol").value;
-    const glucRaw = document.getElementById("glucose").value;
+    const sbp = sbpRaw === "" ? 120 : parseInt(sbpRaw);
+    const dbp = dbpRaw === "" ? 80  : parseInt(dbpRaw);
 
-    const sbpDefaulted = sbpRaw === "";
-    const dbpDefaulted = dbpRaw === "";
-    const cholDefaulted = cholRaw === "";
-    const glucDefaulted = glucRaw === "";
+    const cholesterol = parseInt(document.getElementById("cholesterol").value) || 1;
+    const glucose     = parseInt(document.getElementById("glucose").value)     || 1;
+    const smoke       = document.getElementById("smoke").value === "true";
 
-    const sbp = sbpDefaulted ? 120 : parseInt(sbpRaw);
-    const dbp = dbpDefaulted ? 80  : parseInt(dbpRaw);
-    const cholesterol = cholDefaulted ? 1 : parseInt(cholRaw);
-    const glucose = glucDefaulted ? 1 : parseInt(glucRaw);
-
-    // Lifestyle toggles always have a state (default: non-smoker, no alcohol, active)
-    const smoke = document.getElementById("smoke").checked;
-    const alco  = document.getElementById("alco").checked;
-    const active = document.getElementById("active").checked;
-
-    // Simulate analysis delay (1.2 seconds) to display scanning effect
     setTimeout(() => {
-        // 1. BMI Calculation
+        // 1. BMI
         const bmi = weight / Math.pow(height / 100, 2);
         let bmiClass = "Normal";
-        let bmiStatusClass = "normal";
-        if (bmi < 18.5) {
-            bmiClass = "Underweight";
-            bmiStatusClass = "warning";
-        } else if (bmi >= 18.5 && bmi < 25) {
-            bmiClass = "Normal Weight";
-            bmiStatusClass = "normal";
-        } else if (bmi >= 25 && bmi < 30) {
-            bmiClass = "Overweight";
-            bmiStatusClass = "warning";
-        } else {
-            bmiClass = "Obese";
-            bmiStatusClass = "danger";
-        }
+        if      (bmi < 18.5) bmiClass = "Underweight";
+        else if (bmi < 25)   bmiClass = "Normal";
+        else if (bmi < 30)   bmiClass = "Overweight";
+        else                  bmiClass = "Obese";
 
-        // 2. Blood Pressure Classification
+        // 2. Blood Pressure
         let bpClass = "Normal";
-        let bpStatusClass = "normal";
-        if (sbp < 120 && dbp < 80) {
-            bpClass = "Normal";
-            bpStatusClass = "normal";
-        } else if (sbp >= 120 && sbp < 130 && dbp < 80) {
-            bpClass = "Elevated";
-            bpStatusClass = "warning";
-        } else if ((sbp >= 130 && sbp < 140) || (dbp >= 80 && dbp < 90)) {
-            bpClass = "Stage 1 Hypertension";
-            bpStatusClass = "warning";
-        } else if ((sbp >= 140 && sbp <= 180) || (dbp >= 90 && dbp <= 120)) {
-            bpClass = "Stage 2 Hypertension";
-            bpStatusClass = "danger";
-        } else if (sbp > 180 || dbp > 120) {
-            bpClass = "Hypertensive Crisis";
-            bpStatusClass = "danger";
-        }
+        if      (sbp < 120 && dbp < 80)                           bpClass = "Normal";
+        else if (sbp >= 120 && sbp < 130 && dbp < 80)             bpClass = "Elevated";
+        else if ((sbp >= 130 && sbp < 140) || (dbp >= 80 && dbp < 90)) bpClass = "Stage 1 Hypertension";
+        else if ((sbp >= 140 && sbp <= 180) || (dbp >= 90 && dbp <= 120)) bpClass = "Stage 2 Hypertension";
+        else if (sbp > 180 || dbp > 120)                          bpClass = "Hypertensive Crisis";
 
-        // 3. Clinical Prediction Model (Logistic Regression weights)
+        // 3. Logistic Risk Model
         let z = -3.8;
-        z += age * 0.042; // Age
-        if (gender === "male") z += 0.38; // Gender
-        
-        // BMI risk
+        z += age * 0.042;
+        if (gender === "male") z += 0.38;
         if (bmi >= 25 && bmi < 30) z += 0.25;
         if (bmi >= 30) z += 0.6;
-
-        // BP risk
-        if (bpClass === "Elevated") z += 0.3;
+        if (bpClass === "Elevated")             z += 0.3;
         if (bpClass === "Stage 1 Hypertension") z += 0.75;
         if (bpClass === "Stage 2 Hypertension") z += 1.45;
-        if (bpClass === "Hypertensive Crisis") z += 2.3;
-
-        // Pulse Pressure risk
-        const pulsePressure = sbp - dbp;
-        if (pulsePressure > 50) {
-            z += (pulsePressure - 50) * 0.015;
-        }
-
-        // Cholesterol risk
+        if (bpClass === "Hypertensive Crisis")  z += 2.3;
+        const pp = sbp - dbp;
+        if (pp > 50) z += (pp - 50) * 0.015;
         if (cholesterol === 2) z += 0.55;
         if (cholesterol === 3) z += 1.2;
-
-        // Glucose risk
         if (glucose === 2) z += 0.35;
         if (glucose === 3) z += 0.85;
-
-        // Lifestyle risk
         if (smoke) z += 0.8;
-        if (alco) z += 0.15;
-        if (!active) z += 0.45;
 
-        // Map log-odds to probability
-        let riskProbability = 1 / (1 + Math.exp(-z));
-        let riskPercent = Math.round(riskProbability * 100);
-        
-        if (riskPercent < 2) riskPercent = 2; 
-        if (riskPercent > 99) riskPercent = 99;
+        let riskScore = Math.round((1 / (1 + Math.exp(-z))) * 100);
+        riskScore = Math.max(2, Math.min(99, riskScore));
 
-        // Determine Risk Category
-        let riskCategory = "Low Risk";
-        let riskColorClass = "low";
-        let riskColorHex = "#10b981";
-        let riskTextDescription = "";
-
-        if (riskPercent < 10) {
-            riskCategory = "Low Risk";
-            riskColorClass = "low";
-            riskColorHex = "#10b981";
-            riskTextDescription = "Your calculated risk indicates a low overall probability of developing cardiovascular disease in the next 10 years. Maintain healthy diet and active habits.";
-        } else if (riskPercent >= 10 && riskPercent < 25) {
-            riskCategory = "Moderate Risk";
-            riskColorClass = "mod";
-            riskColorHex = "#f59e0b";
-            riskTextDescription = "Your calculated risk is moderate. Focus on actionable improvements in blood pressure, cholesterol levels, or physical activity to reduce cardiovascular load.";
-        } else {
-            riskCategory = "High Risk";
-            riskColorClass = "high";
-            riskColorHex = "#ef4444";
-            riskTextDescription = "Your calculated risk profile is elevated. We recommend checking in with a healthcare provider or cardiologist to establish lipid controls and diagnostic tracking.";
+        // 4. Risk band
+        let band = "low", bandColor = "var(--risk-low)", badgeLabel = "Low risk";
+        if (riskScore >= 10 && riskScore < 25) {
+            band = "mid";  bandColor = "var(--risk-mid)";  badgeLabel = "Moderate risk";
+        } else if (riskScore >= 25) {
+            band = "high"; bandColor = "var(--risk-high)"; badgeLabel = "Elevated risk";
         }
 
-        // 4. Switch Page Views (Page 1 -> Page 2)
-        loadingOverlay.classList.remove("active");
-        document.getElementById("input-page").classList.add("hidden");
-        document.getElementById("results-page").classList.remove("hidden");
-        document.getElementById("btn-print-report").style.display = "inline-flex";
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        // 5. Render result panel
+        overlay.classList.remove("active");
+        document.getElementById("empty-state").classList.add("hidden");
+        document.getElementById("result-view").classList.remove("hidden");
 
-        // Update Page 2 Core Results
-        document.getElementById("risk-percent").innerText = `${riskPercent}%`;
-        document.getElementById("patient-summary").innerText = `${gender === 'male' ? 'Male' : 'Female'} Patient, ${age} Years`;
-        document.getElementById("risk-description").innerText = riskTextDescription;
+        // Score number
+        const scoreEl = document.getElementById("score-number");
+        scoreEl.textContent = riskScore;
+        scoreEl.style.color = bandColor;
 
-        // Risk Badge
-        const indicator = document.getElementById("risk-indicator");
-        indicator.className = `risk-badge ${riskColorClass}`;
-        indicator.innerText = riskCategory;
+        // Risk badge
+        const badge = document.getElementById("risk-badge");
+        badge.textContent = badgeLabel;
+        badge.className = `risk-badge ${band}`;
 
-        // Update SVG Radial Gauge
-        const radialGauge = document.getElementById("risk-gauge");
-        const radius = 90;
-        const circumference = 2 * Math.PI * radius; // ~565.48
-        const offset = circumference - (riskPercent / 100) * circumference;
-        radialGauge.style.strokeDashoffset = offset;
-        radialGauge.style.stroke = riskColorHex;
-
-        // 5. Populate Vitals Summary Pills (Previous Inputs Details)
-        const summaryPillBox = document.getElementById("summary-pill-box");
-        summaryPillBox.innerHTML = ""; // Clear
-
-        const cholMap = { 1: "Normal", 2: "Above Normal", 3: "Well Above Normal" };
-        const glucMap = { 1: "Normal", 2: "Above Normal", 3: "Well Above Normal" };
-
-        // Each pill: { label, value, defaulted }
-        const pills = [
-            { label: "Age",            value: `${age} yrs`,                          defaulted: false },
-            { label: "Gender",         value: gender === 'male' ? 'Male' : 'Female', defaulted: false },
-            { label: "Height",         value: `${height} cm`,                        defaulted: false },
-            { label: "Weight",         value: `${weight} kg`,                        defaulted: false },
-            { label: "Blood Pressure", value: `${sbp}/${dbp} mmHg`,                 defaulted: sbpDefaulted || dbpDefaulted },
-            { label: "Cholesterol",    value: cholMap[cholesterol],                  defaulted: cholDefaulted },
-            { label: "Glucose",        value: glucMap[glucose],                      defaulted: glucDefaulted },
-            { label: "Smoking",        value: smoke ? 'Yes' : 'No',                  defaulted: false },
-            { label: "Alcohol",        value: alco  ? 'Yes' : 'No',                  defaulted: false },
-            { label: "Active",         value: active ? 'Yes' : 'No',                 defaulted: false },
-        ];
-
-        pills.forEach(p => {
-            const pillEl = document.createElement("div");
-            pillEl.className = p.defaulted ? "summary-pill defaulted" : "summary-pill";
-            pillEl.innerHTML = `${p.label}: <strong>${p.value}</strong>`;
-            summaryPillBox.appendChild(pillEl);
+        // Progress bar (defer for CSS transition)
+        const fill = document.getElementById("score-bar-fill");
+        fill.style.width = "0%";
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                fill.style.width = riskScore + "%";
+                fill.style.backgroundColor = bandColor;
+            });
         });
 
-        // Show a notice if any defaults were used
-        const anyDefaulted = sbpDefaulted || dbpDefaulted || cholDefaulted || glucDefaulted;
-        const existingNotice = document.getElementById("defaults-notice");
-        if (existingNotice) existingNotice.remove();
-        if (anyDefaulted) {
-            const notice = document.createElement("p");
-            notice.id = "defaults-notice";
-            notice.style.cssText = "font-size:0.8rem; color:#b45309; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:0.5rem 0.85rem; margin-top:0.75rem;";
-            notice.innerHTML = "⚠️ <strong>Amber pills</strong> indicate values estimated from healthy population averages. Provide those inputs for a more precise result.";
-            summaryPillBox.after(notice);
+        // BMI note
+        document.getElementById("bmi-note").innerHTML =
+            `BMI <strong>${bmi.toFixed(1)}</strong> (${bmiClass}). Score reflects the combined weight of the inputs below.`;
+
+        // Contributing factors
+        renderFactors({ age, gender, bmi, bpClass, sbp, dbp, cholesterol, glucose, smoke, bandColor });
+
+        // Scroll to result on mobile
+        if (window.innerWidth < 1024) {
+            document.getElementById("result").scrollIntoView({ behavior: "smooth", block: "start" });
         }
 
-        // 6. Risk Drivers Analysis (What is causing the percentage to go high)
-        const driversBox = document.getElementById("drivers-box");
-        driversBox.innerHTML = ""; // Clear
-
-        const drivers = [];
-
-        // Check Blood Pressure driver
-        if (sbp >= 140 || dbp >= 90) {
-            drivers.push({
-                name: "Hypertension (Stage 2)",
-                status: "high",
-                val: `${sbp}/${dbp} mmHg`,
-                desc: "High arterial force severely strains cardiovascular walls."
-            });
-        } else if (sbp >= 130 || dbp >= 80) {
-            drivers.push({
-                name: "Elevated Blood Pressure",
-                status: "mod",
-                val: `${sbp}/${dbp} mmHg`,
-                desc: "Borderline readings increase risk of chronic hypertension."
-            });
-        } else {
-            drivers.push({
-                name: "Healthy Blood Pressure",
-                status: "low",
-                val: `${sbp}/${dbp} mmHg`,
-                desc: "Optimal hemodynamic force."
-            });
-        }
-
-        // Check Cholesterol driver
-        if (cholesterol === 3) {
-            drivers.push({
-                name: "High Cholesterol Level",
-                status: "high",
-                val: "Class 3",
-                desc: "High lipids promote coronary plaque accumulation."
-            });
-        } else if (cholesterol === 2) {
-            drivers.push({
-                name: "Elevated Cholesterol",
-                status: "mod",
-                val: "Class 2",
-                desc: "Mild risk of lipid buildup in arteries."
-            });
-        } else {
-            drivers.push({
-                name: "Optimal Cholesterol",
-                status: "low",
-                val: "Class 1",
-                desc: "Healthy baseline lipid balance."
-            });
-        }
-
-        // Check Glucose driver
-        if (glucose === 3) {
-            drivers.push({
-                name: "High Glucose Level",
-                status: "high",
-                val: "Class 3",
-                desc: "High blood sugar accelerates arterial damage."
-            });
-        } else if (glucose === 2) {
-            drivers.push({
-                name: "Elevated Glucose",
-                status: "mod",
-                val: "Class 2",
-                desc: "Pre-diabetic glycemic profile ranges."
-            });
-        } else {
-            drivers.push({
-                name: "Optimal Glucose",
-                status: "low",
-                val: "Class 1",
-                desc: "Healthy glucose clearance rate."
-            });
-        }
-
-        // Check Weight / BMI driver
-        if (bmi >= 30) {
-            drivers.push({
-                name: "Obese BMI Classification",
-                status: "high",
-                val: `${bmi.toFixed(1)} kg/m²`,
-                desc: "Excess body mass strains heart output capacity."
-            });
-        } else if (bmi >= 25) {
-            drivers.push({
-                name: "Overweight BMI",
-                status: "mod",
-                val: `${bmi.toFixed(1)} kg/m²`,
-                desc: "Slight excess body weight increases load."
-            });
-        } else if (bmi >= 18.5) {
-            drivers.push({
-                name: "Healthy BMI Range",
-                status: "low",
-                val: `${bmi.toFixed(1)} kg/m²`,
-                desc: "Optimal height-to-weight balance."
-            });
-        }
-
-        // Check Smoking driver
-        if (smoke) {
-            drivers.push({
-                name: "Active Tobacco Use",
-                status: "high",
-                val: "Smoker",
-                desc: "Nicotine causes immediate vessel restriction and plaque instability."
-            });
-        }
-
-        // Check Activity driver
-        if (!active) {
-            drivers.push({
-                name: "Sedentary Lifestyle",
-                status: "mod",
-                val: "Inactive",
-                desc: "Inactivity reduces vascular flexibility and aerobic strength."
-            });
-        }
-
-        // Check Age driver (Non-modifiable)
-        if (age >= 60) {
-            drivers.push({
-                name: "Advanced Biological Age",
-                status: "high",
-                val: `${age} yrs`,
-                desc: "Natural age-related arterial hardening (non-modifiable)."
-            });
-        } else if (age >= 45) {
-            drivers.push({
-                name: "Moderate Age Risk Factor",
-                status: "mod",
-                val: `${age} yrs`,
-                desc: "Standard age-related cardiovascular risk progression."
-            });
-        }
-
-        // Render Driver Cards
-        drivers.forEach(d => {
-            const card = document.createElement("div");
-            card.className = `driver-card ${d.status}`;
-            card.innerHTML = `
-                <div class="driver-info">
-                    <h5>${d.name}</h5>
-                    <p>${d.desc}</p>
-                </div>
-                <div class="driver-value ${d.status}">${d.val}</div>
-            `;
-            driversBox.appendChild(card);
-        });
-
-        // 7. Dynamic Recommendations (How to reduce it)
-        const recList = document.getElementById("recommendations-list");
-        recList.innerHTML = ""; // Clear
-
-        let recs = [];
-        
-        if (bpClass !== "Normal") {
-            recs.push({
-                type: "bp",
-                icon: "❤️",
-                title: "Reduce Blood Pressure",
-                desc: `Sodium reduction (below 2000mg/day), dietary changes (DASH plan), and moderate physical activity can reduce systolic pressure by 5-10 mmHg. Speak with a doctor regarding clinical targets.`
-            });
-        }
-        if (cholesterol > 1) {
-            recs.push({
-                type: "diet",
-                icon: "🥗",
-                title: "Reduce LDL Cholesterol",
-                desc: `Introduce soluble fibers (oat bran, beans) and plant sterols. Minimize intake of saturated and trans-fats. Omega-3 fatty acid intake will help raise protective HDL.`
-            });
-        }
-        if (glucose > 1) {
-            recs.push({
-                type: "diet",
-                icon: "🩸",
-                title: "Control Glucose Spikes",
-                desc: "Switch to high-fiber complex grains (quinoa, brown rice) and eliminate refined sugars. Exercising shortly after meals improves glucose clearance."
-            });
-        }
-        if (bmi >= 25) {
-            recs.push({
-                type: "lifestyle",
-                icon: "⚖️",
-                title: "Manage Body Weight",
-                desc: `Aiming for a 5% to 10% weight reduction over 6 months significantly reduces arterial pressure and strain. Create a structured 300-500 kcal deficit.`
-            });
-        }
-        if (smoke) {
-            recs.push({
-                type: "lifestyle",
-                icon: "🚬",
-                title: "Halt Nicotine Intake",
-                desc: "Smoking cessation is the single most impactful action. Risk of myocardial infarction drops by 50% within just one year of quitting."
-            });
-        }
-        if (!active) {
-            recs.push({
-                type: "lifestyle",
-                icon: "🏃",
-                title: "Increase Physical Training",
-                desc: "Initiate cardiorespiratory conditioning. Target 30 minutes of brisk walking or cycling at least 5 days a week to lower resting heart rate and arterial stiffness."
-            });
-        }
-        
-        if (recs.length === 0) {
-            recs.push({
-                type: "diet",
-                icon: "🌟",
-                title: "Maintain Optimal Vitals",
-                desc: "Continue supporting your cardiac health with regular exercise, a Mediterranean diet high in monounsaturated fats, and yearly diagnostic profiling."
-            });
-        }
-
-        recs.forEach(r => {
-            const item = document.createElement("div");
-            item.className = `rec-item ${r.type}`;
-            item.innerHTML = `
-                <div class="rec-icon">${r.icon}</div>
-                <div class="rec-content">
-                    <h4>${r.title}</h4>
-                    <p>${r.desc}</p>
-                </div>
-            `;
-            recList.appendChild(item);
-        });
-
-        // 8. Populate printable PDF Clinical Report Data
-        document.getElementById("report-age").innerText = age;
-        document.getElementById("report-gender").innerText = gender;
-        document.getElementById("report-bmi").innerText = bmi.toFixed(1);
-        document.getElementById("report-bmi-class").innerText = bmiClass;
-        
-        let reportStatusText = `Patient is a ${age}-year-old ${gender}. Vitals indicate ${bpClass.toLowerCase()} (${sbp}/${dbp} mmHg), with cholesterol classified as ${cholMap[cholesterol].toLowerCase()} and glucose as ${glucMap[glucose].toLowerCase()}.`;
-        document.getElementById("report-status-summary").innerText = reportStatusText;
-
-        // Report Risk Banner
-        const rBanner = document.getElementById("report-risk-banner");
-        rBanner.className = `report-risk-banner ${riskColorClass}`;
-        document.getElementById("report-risk-score").innerText = `${riskPercent}%`;
-        document.getElementById("report-risk-label").innerText = `${riskCategory}`;
-        
-        let reportRiskDesc = `Calculated 10-year risk profile is ${riskPercent}%. `;
-        if (riskCategory === "Low Risk") {
-            reportRiskDesc += "General prognosis is favorable. Follow preventative habits and regular medical screenings.";
-        } else if (riskCategory === "Moderate Risk") {
-            reportRiskDesc += "Moderate risk indicators detected. Actionable behavioral changes (aerobic activity, sodium reductions, dietary improvements) are recommended to maintain arterial elasticity.";
-        } else {
-            reportRiskDesc += "Elevated risk parameters identified. Clinical consultation, lipid profiling, and therapeutic interventions may be indicated to mitigate potential coronary artery disease.";
-        }
-        document.getElementById("report-risk-desc").innerText = reportRiskDesc;
-
-        // Table updates
-        document.getElementById("report-val-sbp").innerText = sbp;
-        document.getElementById("report-class-sbp").innerText = bpClass;
-        document.getElementById("report-flag-sbp").innerText = sbp >= 130 ? "HIGH" : "Normal";
-        document.getElementById("report-flag-sbp").className = sbp >= 140 ? "flag-danger" : (sbp >= 120 ? "flag-warning" : "flag-normal");
-
-        document.getElementById("report-val-dbp").innerText = dbp;
-        document.getElementById("report-class-dbp").innerText = bpClass;
-        document.getElementById("report-flag-dbp").innerText = dbp >= 80 ? "HIGH" : "Normal";
-        document.getElementById("report-flag-dbp").className = dbp >= 90 ? "flag-danger" : (dbp >= 80 ? "flag-warning" : "flag-normal");
-
-        document.getElementById("report-val-chol").innerText = cholMap[cholesterol];
-        document.getElementById("report-class-chol").innerText = `Class ${cholesterol}`;
-        document.getElementById("report-flag-chol").innerText = cholesterol > 1 ? "ELEVATED" : "Normal";
-        document.getElementById("report-flag-chol").className = cholesterol === 3 ? "flag-danger" : (cholesterol === 2 ? "flag-warning" : "flag-normal");
-
-        document.getElementById("report-val-gluc").innerText = glucMap[glucose];
-        document.getElementById("report-class-gluc").innerText = `Class ${glucose}`;
-        document.getElementById("report-flag-gluc").innerText = glucose > 1 ? "ELEVATED" : "Normal";
-        document.getElementById("report-flag-gluc").className = glucose === 3 ? "flag-danger" : (glucose === 2 ? "flag-warning" : "flag-normal");
-
-        document.getElementById("report-val-bmi").innerText = bmi.toFixed(1);
-        document.getElementById("report-class-bmi").innerText = bmiClass;
-        document.getElementById("report-flag-bmi").innerText = bmi >= 25 ? "OVERWEIGHT" : (bmi < 18.5 ? "UNDERWEIGHT" : "Normal");
-        document.getElementById("report-flag-bmi").className = bmi >= 30 ? "flag-danger" : (bmi >= 25 || bmi < 18.5 ? "flag-warning" : "flag-normal");
-
-        document.getElementById("report-val-smoke").innerText = smoke ? "Smoker" : "Non-Smoker";
-        document.getElementById("report-flag-smoke").innerText = smoke ? "WARNING" : "Normal";
-        document.getElementById("report-flag-smoke").className = smoke ? "flag-danger" : "flag-normal";
-
-        document.getElementById("report-val-active").innerText = active ? "Active" : "Sedentary";
-        document.getElementById("report-flag-active").innerText = active ? "Normal" : "WARNING";
-        document.getElementById("report-flag-active").className = active ? "flag-normal" : "flag-warning";
-
-        // Narrative Advice Box
-        let adviceNarrative = `Clinical Analysis Summary: The patient's risk is assessed at ${riskPercent}%. `;
-        if (recs.length > 0) {
-            adviceNarrative += "Primary clinical actions involve: " + recs.map(r => r.title.replace("Plan", "").replace("Guidelines", "").replace("Controls", "")).join(", ") + ". ";
-        }
-        adviceNarrative += "Advise periodic testing of serum glucose and lipid markers. Review lifestyle choices periodically.";
-        document.getElementById("report-assessment-text").innerText = adviceNarrative;
-
-        // 9. Render dynamic comparison chart
-        renderChart(riskPercent);
-
-    }, 1200);
+    }, 800);
 }
 
-// Render dynamic comparison chart in light theme
-function renderChart(patientRisk) {
-    const ctx = document.getElementById('riskChart').getContext('2d');
-    
-    if (riskChart) {
-        riskChart.destroy();
-    }
+// ----- Contributing Factors -----
+function renderFactors({ age, gender, bmi, bpClass, sbp, dbp, cholesterol, glucose, smoke, bandColor }) {
+    const list = document.getElementById("factors-list");
+    list.innerHTML = "";
 
-    // Chart.js Configuration for Light Theme
-    riskChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: ['Optimal Baseline', 'Patient Score', 'Uncontrolled Risk Profile'],
-            datasets: [{
-                label: 'Risk Percentage',
-                data: [5, patientRisk, 75],
-                backgroundColor: [
-                    'rgba(16, 185, 129, 0.25)', // Green
-                    patientRisk < 10 ? 'rgba(16, 185, 129, 0.65)' : (patientRisk < 25 ? 'rgba(245, 158, 11, 0.65)' : 'rgba(239, 68, 68, 0.65)'),
-                    'rgba(239, 68, 68, 0.2)'  // Red
-                ],
-                borderColor: [
-                    '#10b981',
-                    patientRisk < 10 ? '#10b981' : (patientRisk < 25 ? '#f59e0b' : '#ef4444'),
-                    '#ef4444'
-                ],
-                borderWidth: 2,
-                borderRadius: 8,
-                barThickness: 45
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return ` ${context.parsed.y}% Probability`;
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    grid: {
-                        color: '#f1f5f9' // Light slate line
-                    },
-                    ticks: {
-                        color: '#64748b', // Slate 500
-                        callback: function(value) {
-                            return value + '%';
-                        }
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false
-                    },
-                    ticks: {
-                        color: '#475569', // Slate 600
-                        font: {
-                            family: 'Outfit',
-                            weight: '500'
-                        }
-                    }
-                }
-            }
-        }
+    const factors = [];
+
+    // Blood pressure
+    const bpPctMap = {
+        "Normal": 8, "Elevated": 28,
+        "Stage 1 Hypertension": 52, "Stage 2 Hypertension": 82, "Hypertensive Crisis": 96
+    };
+    const bpPct = bpPctMap[bpClass] ?? 8;
+    factors.push({
+        name: "Blood pressure",
+        pct: bpPct,
+        risk: bpPct > 20,
+        note: `${sbp}/${dbp} mmHg`
+    });
+
+    // Age
+    const agePct = Math.round(Math.min(Math.max((age - 18) / 62 * 100, 5), 95));
+    factors.push({ name: "Age", pct: agePct, risk: age >= 45, note: `${age} yrs` });
+
+    // BMI
+    const bmiPct = bmi >= 30 ? 70 : bmi >= 25 ? 38 : bmi < 18.5 ? 22 : 10;
+    factors.push({ name: "BMI", pct: bmiPct, risk: bmi >= 25, note: bmi.toFixed(1) });
+
+    // Cholesterol
+    const cholPct = cholesterol === 3 ? 80 : cholesterol === 2 ? 44 : 9;
+    const cholLabel = ["", "Normal", "Above normal", "Well above"][cholesterol] || "Normal";
+    factors.push({ name: "Cholesterol", pct: cholPct, risk: cholesterol > 1, note: cholLabel });
+
+    // Glucose
+    const glucPct = glucose === 3 ? 64 : glucose === 2 ? 33 : 8;
+    const glucLabel = ["", "Normal", "Above normal", "Well above"][glucose] || "Normal";
+    factors.push({ name: "Glucose", pct: glucPct, risk: glucose > 1, note: glucLabel });
+
+    // Smoking
+    factors.push({
+        name: "Smoking",
+        pct: smoke ? 74 : 5,
+        risk: smoke,
+        note: smoke ? "Active smoker" : "Non-smoker"
+    });
+
+    // Sex
+    factors.push({
+        name: "Sex",
+        pct: gender === "male" ? 38 : 18,
+        risk: gender === "male",
+        note: gender === "male" ? "Male" : "Female"
+    });
+
+    factors.forEach(f => {
+        const barColor = f.risk ? bandColor : "var(--risk-low)";
+        const li = document.createElement("li");
+        li.className = "factor-item";
+        li.innerHTML = `
+            <span class="factor-name">${f.name}</span>
+            <div class="factor-bar-track">
+                <div class="factor-bar-fill" style="width: 0%; background-color: ${barColor};" data-pct="${f.pct}"></div>
+            </div>
+            <span class="factor-note">${f.note}</span>
+        `;
+        list.appendChild(li);
+    });
+
+    // Animate factor bars after append
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            list.querySelectorAll(".factor-bar-fill").forEach(bar => {
+                bar.style.width = bar.dataset.pct + "%";
+            });
+        });
     });
 }
