@@ -37,73 +37,106 @@
         <!-- ================= PAGE 1: PATIENT METRICS FORM ================= -->
         <div id="input-page" class="page-view form-container">
             <div class="inputs-layout-grid">
-                <!-- Left Column: Clinical Inputs -->
+                <!-- Left Column: Clinical Inputs (4 Blocks) -->
                 <div class="premium-card">
                     <h2 class="form-title">
                         <span>🩺</span> Clinical Metrics Entry
                     </h2>
                     <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1.5rem;">
-                        Input the patient's biological vitals, chemical markers, and lifestyle choices below to run the predictive cardiac risk assessment.
+                        Fill in what you know. Only <strong>Basic Info</strong> is required — all other blocks are optional and will use healthy population averages if left blank.
                     </p>
-                    
+
                     <form id="metrics-form" onsubmit="handleFormSubmit(event)">
-                        <div class="form-group-grid">
+
+                        <!-- Block 1: Basic Info (Required) -->
+                        <div class="input-block">
+                            <div class="block-header">
+                                <span class="block-icon">🧍</span>
+                                <span class="block-title">Basic Info</span>
+                                <span class="block-badge required">Required</span>
+                            </div>
+                            <div class="form-group-grid">
+                                <div class="form-group">
+                                    <label for="age">Age (Years)</label>
+                                    <input type="number" id="age" name="age" min="18" max="110" placeholder="e.g. 45" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="gender">Gender</label>
+                                    <select id="gender" name="gender" required>
+                                        <option value="" disabled selected>Select</option>
+                                        <option value="male">Male</option>
+                                        <option value="female">Female</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group-grid">
+                                <div class="form-group">
+                                    <label for="height">Height (cm)</label>
+                                    <input type="number" id="height" name="height" min="100" max="250" placeholder="e.g. 175" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="weight">Weight (kg)</label>
+                                    <input type="number" id="weight" name="weight" min="30" max="250" placeholder="e.g. 70" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Block 2: Blood Pressure (Optional) -->
+                        <div class="input-block optional">
+                            <div class="block-header">
+                                <span class="block-icon">🩺</span>
+                                <span class="block-title">Blood Pressure</span>
+                                <span class="block-badge optional-badge">Optional</span>
+                            </div>
+                            <p class="block-hint">Leave blank to use population average (120 / 80 mmHg)</p>
+                            <div class="form-group-grid">
+                                <div class="form-group">
+                                    <label for="ap-hi">Systolic BP (mmHg)</label>
+                                    <input type="number" id="ap-hi" name="ap-hi" min="70" max="250" placeholder="Default: 120">
+                                </div>
+                                <div class="form-group">
+                                    <label for="ap-low">Diastolic BP (mmHg)</label>
+                                    <input type="number" id="ap-low" name="ap-low" min="40" max="150" placeholder="Default: 80">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Block 3: Lab Results (Optional) -->
+                        <div class="input-block optional">
+                            <div class="block-header">
+                                <span class="block-icon">🧪</span>
+                                <span class="block-title">Lab Results</span>
+                                <span class="block-badge optional-badge">Optional</span>
+                            </div>
+                            <p class="block-hint">Leave at default (Normal) if you don't have lab values</p>
                             <div class="form-group">
-                                <label for="age">Age (Years)</label>
-                                <input type="number" id="age" name="age" min="18" max="110" placeholder="e.g. 45" required>
+                                <label for="cholesterol">Cholesterol Level</label>
+                                <select id="cholesterol" name="cholesterol">
+                                    <option value="">— Not Provided (Default: Normal) —</option>
+                                    <option value="1">Normal</option>
+                                    <option value="2">Above Normal</option>
+                                    <option value="3">Well Above Normal</option>
+                                </select>
                             </div>
                             <div class="form-group">
-                                <label for="gender">Gender</label>
-                                <select id="gender" name="gender" required>
-                                    <option value="" disabled selected>Select</option>
-                                    <option value="male">Male</option>
-                                    <option value="female">Female</option>
+                                <label for="glucose">Glucose Level</label>
+                                <select id="glucose" name="glucose">
+                                    <option value="">— Not Provided (Default: Normal) —</option>
+                                    <option value="1">Normal</option>
+                                    <option value="2">Above Normal</option>
+                                    <option value="3">Well Above Normal</option>
                                 </select>
                             </div>
                         </div>
 
-                        <div class="form-group-grid">
-                            <div class="form-group">
-                                <label for="height">Height (cm)</label>
-                                <input type="number" id="height" name="height" min="100" max="250" placeholder="e.g. 175" required>
+                        <!-- Block 4: Lifestyle (Optional) -->
+                        <div class="input-block optional">
+                            <div class="block-header">
+                                <span class="block-icon">🏃</span>
+                                <span class="block-title">Lifestyle</span>
+                                <span class="block-badge optional-badge">Optional</span>
                             </div>
-                            <div class="form-group">
-                                <label for="weight">Weight (kg)</label>
-                                <input type="number" id="weight" name="weight" min="30" max="250" placeholder="e.g. 70" required>
-                            </div>
-                        </div>
-
-                        <div class="form-group-grid">
-                            <div class="form-group">
-                                <label for="ap-hi">Systolic BP (ap-hi)</label>
-                                <input type="number" id="ap-hi" name="ap-hi" min="70" max="250" placeholder="e.g. 120" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="ap-low">Diastolic BP (ap-low)</label>
-                                <input type="number" id="ap-low" name="ap-low" min="40" max="150" placeholder="e.g. 80" required>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="cholesterol">Cholesterol Level</label>
-                            <select id="cholesterol" name="cholesterol" required>
-                                <option value="1">Normal</option>
-                                <option value="2">Above Normal</option>
-                                <option value="3">Well Above Normal</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="glucose">Glucose Level</label>
-                            <select id="glucose" name="glucose" required>
-                                <option value="1">Normal</option>
-                                <option value="2">Above Normal</option>
-                                <option value="3">Well Above Normal</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group full-width">
-                            <label>Lifestyle Vitals</label>
+                            <p class="block-hint">Defaults assume a non-smoker, no alcohol, physically active profile</p>
                             <div class="toggle-grid">
                                 <div class="toggle-item">
                                     <span>🚬 Smoking Habit</span>
@@ -129,7 +162,7 @@
                             </div>
                         </div>
 
-                        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem; font-size: 1.1rem; padding: 1rem;">
+                        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1.5rem; font-size: 1.1rem; padding: 1rem;">
                             <span>⚡</span> Run Predictive Analysis
                         </button>
                     </form>

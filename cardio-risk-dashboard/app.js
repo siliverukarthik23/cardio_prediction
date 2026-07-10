@@ -30,17 +30,31 @@ function handleFormSubmit(event) {
     const loadingOverlay = document.getElementById("loading-overlay");
     loadingOverlay.classList.add("active");
 
-    // Gather inputs
+    // --- Gather Required Inputs ---
     const age = parseInt(document.getElementById("age").value);
     const gender = document.getElementById("gender").value;
     const height = parseFloat(document.getElementById("height").value);
     const weight = parseFloat(document.getElementById("weight").value);
-    const sbp = parseInt(document.getElementById("ap-hi").value);
-    const dbp = parseInt(document.getElementById("ap-low").value);
-    const cholesterol = parseInt(document.getElementById("cholesterol").value);
-    const glucose = parseInt(document.getElementById("glucose").value);
+
+    // --- Gather Optional Inputs with defaults ---
+    const sbpRaw = document.getElementById("ap-hi").value;
+    const dbpRaw = document.getElementById("ap-low").value;
+    const cholRaw = document.getElementById("cholesterol").value;
+    const glucRaw = document.getElementById("glucose").value;
+
+    const sbpDefaulted = sbpRaw === "";
+    const dbpDefaulted = dbpRaw === "";
+    const cholDefaulted = cholRaw === "";
+    const glucDefaulted = glucRaw === "";
+
+    const sbp = sbpDefaulted ? 120 : parseInt(sbpRaw);
+    const dbp = dbpDefaulted ? 80  : parseInt(dbpRaw);
+    const cholesterol = cholDefaulted ? 1 : parseInt(cholRaw);
+    const glucose = glucDefaulted ? 1 : parseInt(glucRaw);
+
+    // Lifestyle toggles always have a state (default: non-smoker, no alcohol, active)
     const smoke = document.getElementById("smoke").checked;
-    const alco = document.getElementById("alco").checked;
+    const alco  = document.getElementById("alco").checked;
     const active = document.getElementById("active").checked;
 
     // Simulate analysis delay (1.2 seconds) to display scanning effect
@@ -179,25 +193,38 @@ function handleFormSubmit(event) {
         const cholMap = { 1: "Normal", 2: "Above Normal", 3: "Well Above Normal" };
         const glucMap = { 1: "Normal", 2: "Above Normal", 3: "Well Above Normal" };
 
+        // Each pill: { label, value, defaulted }
         const pills = [
-            `Age: <strong>${age} yrs</strong>`,
-            `Gender: <strong>${gender === 'male' ? 'Male' : 'Female'}</strong>`,
-            `Height: <strong>${height} cm</strong>`,
-            `Weight: <strong>${weight} kg</strong>`,
-            `Blood Pressure: <strong>${sbp}/${dbp} mmHg</strong>`,
-            `Cholesterol: <strong>${cholMap[cholesterol]}</strong>`,
-            `Glucose: <strong>${glucMap[glucose]}</strong>`,
-            `Smoking: <strong>${smoke ? 'Yes' : 'No'}</strong>`,
-            `Alcohol: <strong>${alco ? 'Yes' : 'No'}</strong>`,
-            `Active: <strong>${active ? 'Yes' : 'No'}</strong>`
+            { label: "Age",            value: `${age} yrs`,                          defaulted: false },
+            { label: "Gender",         value: gender === 'male' ? 'Male' : 'Female', defaulted: false },
+            { label: "Height",         value: `${height} cm`,                        defaulted: false },
+            { label: "Weight",         value: `${weight} kg`,                        defaulted: false },
+            { label: "Blood Pressure", value: `${sbp}/${dbp} mmHg`,                 defaulted: sbpDefaulted || dbpDefaulted },
+            { label: "Cholesterol",    value: cholMap[cholesterol],                  defaulted: cholDefaulted },
+            { label: "Glucose",        value: glucMap[glucose],                      defaulted: glucDefaulted },
+            { label: "Smoking",        value: smoke ? 'Yes' : 'No',                  defaulted: false },
+            { label: "Alcohol",        value: alco  ? 'Yes' : 'No',                  defaulted: false },
+            { label: "Active",         value: active ? 'Yes' : 'No',                 defaulted: false },
         ];
 
         pills.forEach(p => {
             const pillEl = document.createElement("div");
-            pillEl.className = "summary-pill";
-            pillEl.innerHTML = p;
+            pillEl.className = p.defaulted ? "summary-pill defaulted" : "summary-pill";
+            pillEl.innerHTML = `${p.label}: <strong>${p.value}</strong>`;
             summaryPillBox.appendChild(pillEl);
         });
+
+        // Show a notice if any defaults were used
+        const anyDefaulted = sbpDefaulted || dbpDefaulted || cholDefaulted || glucDefaulted;
+        const existingNotice = document.getElementById("defaults-notice");
+        if (existingNotice) existingNotice.remove();
+        if (anyDefaulted) {
+            const notice = document.createElement("p");
+            notice.id = "defaults-notice";
+            notice.style.cssText = "font-size:0.8rem; color:#b45309; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:0.5rem 0.85rem; margin-top:0.75rem;";
+            notice.innerHTML = "⚠️ <strong>Amber pills</strong> indicate values estimated from healthy population averages. Provide those inputs for a more precise result.";
+            summaryPillBox.after(notice);
+        }
 
         // 6. Risk Drivers Analysis (What is causing the percentage to go high)
         const driversBox = document.getElementById("drivers-box");
