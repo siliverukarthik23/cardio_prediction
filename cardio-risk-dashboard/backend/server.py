@@ -173,8 +173,9 @@ def predict():
 # Run
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5050))
     print("=" * 55)
     print(" Cormeum CVD Prediction API")
-    print(" POST http://localhost:5050/predict")
+    print(f" Listening on port {port}")
     print("=" * 55)
-    app.run(host="0.0.0.0", port=5050, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=False)

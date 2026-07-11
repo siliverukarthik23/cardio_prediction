@@ -4,7 +4,10 @@
 // Backend: Flask API at localhost:5050/predict (with JS fallback)
 // =====================================================
 
-const API_URL = "http://localhost:5050/predict";
+// Change this to your deployed Render URL (e.g. "https://cormeum-backend.onrender.com/predict")
+const API_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" 
+    ? "http://localhost:5050/predict" 
+    : "https://<YOUR-RENDER-APP-NAME>.onrender.com/predict";
 let _computed  = null;
 let _backendOk = false;
 
@@ -33,8 +36,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function probeBackend() {
     const indicator = document.getElementById("backend-indicator");
+    // Extract base URL from API_URL (e.g., "https://xyz.onrender.com")
+    const baseUrl = API_URL.replace("/predict", "");
     try {
-        const res = await fetch("http://localhost:5050/", { method: "GET", signal: AbortSignal.timeout(2000) });
+        const res = await fetch(baseUrl + "/", { method: "GET", signal: AbortSignal.timeout(2000) });
         if (res.ok) {
             _backendOk = true;
             if (indicator) {
