@@ -118,8 +118,8 @@ async function handleFormSubmit(event) {
     const dbpRaw = document.getElementById("ap-low").value;
     const sbpDefaulted = sbpRaw === "";
     const dbpDefaulted = dbpRaw === "";
-    const sbp = sbpDefaulted ? 120 : parseInt(sbpRaw);
-    const dbp = dbpDefaulted ? 80  : parseInt(dbpRaw);
+    let sbp = sbpDefaulted ? Math.round(100 + (age * 0.4) + (weight * 0.1)) : parseInt(sbpRaw);
+    let dbp = dbpDefaulted ? Math.round(sbp * 0.65) : parseInt(dbpRaw);
 
     const cholRaw = document.getElementById("cholesterol").value;
     const glucRaw = document.getElementById("glucose").value;
