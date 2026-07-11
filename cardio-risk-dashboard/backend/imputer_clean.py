@@ -16,10 +16,10 @@ try:
 except ImportError:
     JOBLIB_OK = False
 
-# Population-level medians / modes (Kaggle Cardiovascular Disease dataset)
+# We no longer use static defaults for BP (ap_hi, ap_lo)
+# If XGBoost fails, we will dynamically estimate them based on Age/BMI
+OPTIONAL_FIELDS = ["ap_hi", "ap_lo", "cholesterol", "gluc"]
 POPULATION_DEFAULTS = {
-    "ap_hi":       120.0,   # mmHg systolic
-    "ap_lo":       80.0,    # mmHg diastolic
     "cholesterol": 1.0,     # 1=Normal
     "gluc":        1.0,     # 1=Normal
 }
@@ -67,7 +67,7 @@ def impute_input(user_dict: dict) -> tuple:
                 for k, v in user_dict.items()}
     imputed_fields = []
 
-    missing = [col for col in POPULATION_DEFAULTS if complete.get(col) is None]
+    missing = [col for col in OPTIONAL_FIELDS if complete.get(col) is None]
     if not missing:
         return complete, []
 
@@ -108,10 +108,22 @@ def impute_input(user_dict: dict) -> tuple:
             except Exception as e:
                 print(f"  [Imputer] XGBoost predict failed for '{col}': {e}", flush=True)
 
-        # ── Fallback: population median ─────────────────────────────────
+        # ── Fallback: dynamic heuristic or population median ────────────
         if not predicted:
-            complete[col] = POPULATION_DEFAULTS[col]
+            if col == "ap_hi":
+                # Dynamic heuristic for Systolic BP based on Age and Weight
+                age = complete.get("age", 40)
+                weight = complete.get("weight", 70)
+                fallback_val = round(100 + (age * 0.4) + (weight * 0.1), 1)
+            elif col == "ap_lo":
+                # Dynamic heuristic for Diastolic BP
+                ap_hi = complete.get("ap_hi", 120)
+                fallback_val = round(ap_hi * 0.65, 1)
+            else:
+                fallback_val = POPULATION_DEFAULTS.get(col, 1.0)
+                
+            complete[col] = fallback_val
             imputed_fields.append(col)
-            print(f"  [Imputer] '{col}' → population default {POPULATION_DEFAULTS[col]}", flush=True)
+            print(f"  [Imputer] '{col}' → dynamic fallback {fallback_val}", flush=True)
 
     return complete, imputed_fields
