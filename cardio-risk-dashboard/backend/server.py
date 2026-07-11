@@ -6,6 +6,7 @@ Run: python server.py
 Endpoint: POST http://localhost:5050/predict
 """
 
+import os
 import sys
 import json
 import traceback
@@ -19,7 +20,7 @@ from imputer_clean import impute_input
 from predictor import predict_risk
 
 app = Flask(__name__)
-CORS(app)  # Allow requests from the frontend (localhost:8080)
+CORS(app, origins="*", supports_credentials=False)  # Allow all origins (Vercel + localhost)
 
 
 # ---------------------------------------------------------------------------

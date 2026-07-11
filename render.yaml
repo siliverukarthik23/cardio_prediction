@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: cormeum-backend
+    runtime: python
+    rootDir: cardio-risk-dashboard/backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn server:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
