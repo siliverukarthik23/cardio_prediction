@@ -4,10 +4,9 @@
 // Backend: Flask API at localhost:5050/predict (with JS fallback)
 // =====================================================
 
-// Change this to your deployed Render URL (e.g. "https://cormeum-backend.onrender.com/predict")
 const API_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" 
     ? "http://localhost:5050/predict" 
-    : "https://<YOUR-RENDER-APP-NAME>.onrender.com/predict";
+    : "https://cardio-prediction-cardio-risk-dashboard.onrender.com/predict";
 let _computed  = null;
 let _backendOk = false;
 
